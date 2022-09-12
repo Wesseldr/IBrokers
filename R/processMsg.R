@@ -408,7 +408,44 @@ processMsg <- function(curMsg, con, eWrapper, timestamp, file, twsconn, ...)
   if(curMsg == .twsIncomingMSG$DISPLAY_GROUP_UPDATED) {
     msg <- readBin(con, "character", 3)
     eWrapper$displayGroupUpdated(curMsg, msg, timestamp, file, ...)
-  } else {
+  } else 
+  if(curMsg == .twsIncomingMSG$SYMBOL_SAMPLES) {
+    tickerId <- readBin(con, character(), 1)
+    numberOfElements <- as.integer( readBin(con, character(), 1) )
+    
+    ContractDescriptionList <- list()
+    for (i in 1:numberOfElements) {
+      contract <- list()
+      msg <- readBin(con, character(), 6)
+
+      # read contract fields
+      contract$conId <- as.integer(msg[1])
+      contract$symbol <- msg[2]
+      contract$secType <- msg[3]
+      contract$primaryExchange <- msg[4]
+      contract$currency <- msg[5]
+      
+      # read derivative sec Types list
+      nDerivativeSecTypes <- as.integer(msg[6])
+
+      derivativeSecTypes <- ""
+      if (nDerivativeSecTypes > 0) {
+         for (j in seq_len(nDerivativeSecTypes)) {
+           msg <- readBin(con, character(), 1L)
+           derivativeSecTypes <- paste(derivativeSecTypes, msg[1])
+         }
+         derivativeSecTypes <- glue::trim(derivativeSecTypes)
+      }
+      
+      ContractDescriptionList[[i]] <- structure(list(
+        contract = contract,
+        derivativeSecTypes = derivativeSecTypes
+      ),class = "twsContractDescription")
+    }
+    
+    # transform into data.frame
+    data.frame(t(sapply(ContractDescriptionList, unlist)), stringsAsFactors = FALSE)
+  }else {
     # default handler/error
     warning(paste("Unknown incoming message: ",curMsg,". Please reset connection",sep=""), call.=FALSE)
   }
